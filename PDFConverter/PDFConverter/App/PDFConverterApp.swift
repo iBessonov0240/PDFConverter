@@ -2,12 +2,12 @@ import SwiftUI
 
 @main
 struct PDFConverterApp: App {
-    let persistenceController = PersistenceController.shared
+
+    let dataController = DataController()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
+            Welcome(viewModel: WelcomeViewModel(dataController: dataController))
         }
     }
 }

@@ -1,50 +1,73 @@
+import Foundation
 import CoreData
 
-struct PersistenceController {
-    static let shared = PersistenceController()
+final class DataController {
 
-    @MainActor
-    static let preview: PersistenceController = {
-        let result = PersistenceController(inMemory: true)
-        let viewContext = result.container.viewContext
-        for _ in 0..<10 {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-        }
-        do {
-            try viewContext.save()
-        } catch {
-            // Replace this implementation with code to handle the error appropriately.
-            // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-            let nsError = error as NSError
-            fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-        }
-        return result
+// MARK: - Property
+
+    static let shared = DataController()
+
+    lazy var context: NSManagedObjectContext = {
+        return persistentContainer.viewContext
     }()
 
-    let container: NSPersistentContainer
-
-    init(inMemory: Bool = false) {
-        container = NSPersistentContainer(name: "PDFConverter")
-        if inMemory {
-            container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
-        }
-        container.loadPersistentStores(completionHandler: { (storeDescription, error) in
+    lazy var persistentContainer: NSPersistentContainer = {
+        let container = NSPersistentContainer(name: "PDFConverter")
+        container.loadPersistentStores(completionHandler: { (_, error) in
             if let error = error as NSError? {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-
-                /*
-                 Typical reasons for an error here include:
-                 * The parent directory does not exist, cannot be created, or disallows writing.
-                 * The persistent store is not accessible, due to permissions or data protection when the device is locked.
-                 * The device is out of space.
-                 * The store could not be migrated to the current model version.
-                 Check the error message to determine what the actual problem was.
-                 */
                 fatalError("Unresolved error \(error), \(error.userInfo)")
             }
         })
-        container.viewContext.automaticallyMergesChangesFromParent = true
+        return container
+    }()
+
+// MARK: - Methods
+
+    func fetchAllPDFs() -> [SavedPDFModel] {
+        let request: NSFetchRequest<SavedPDF> = SavedPDF.fetchRequest()
+        do {
+            let entities = try context.fetch(request)
+            return entities.map { entity in
+                SavedPDFModel(
+                    id: entity.id ?? UUID(),
+                    title: entity.title ?? "Untitled",
+                    fileExtension: entity.fileExtension ?? "pdf",
+                    creationDate: entity.creationDate ?? Date(),
+                    data: entity.data ?? Data()
+                )
+            }
+        } catch {
+            print("Failed to fetch PDFs: \(error)")
+            return []
+        }
+    }
+
+    func deletePDF(by id: UUID) {
+        let request: NSFetchRequest<SavedPDF> = SavedPDF.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        do {
+            let entities = try context.fetch(request)
+            for entity in entities {
+                context.delete(entity)
+            }
+            try context.save()
+        } catch {
+            print("Failed to delete PDF: \(error)")
+        }
+    }
+
+    func savePDF(title: String, data: Data) {
+        let newPDF = SavedPDF(context: context)
+        newPDF.id = UUID()
+        newPDF.title = title
+        newPDF.fileExtension = "pdf"
+        newPDF.creationDate = Date()
+        newPDF.data = data
+
+        do {
+            try context.save()
+        } catch {
+            print("Failed to save PDF: \(error)")
+        }
     }
 }
